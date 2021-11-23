@@ -8,24 +8,24 @@ import (
 	"cloud.google.com/go/spanner"
 )
 
-type Applyer interface {
+type SpannerApplyer interface {
 	Apply(ctx context.Context, ms []*spanner.Mutation, opts ...spanner.ApplyOption) (commitTimestamp time.Time, err error)
 }
 
 type Mutation struct {
 	ms      []*spanner.Mutation
 	mu      sync.RWMutex
-	applyer Applyer
+	applyer SpannerApplyer
 }
 
-func NewMutation(applyer Applyer) *Mutation {
+func NewMutation(applyer SpannerApplyer) *Mutation {
 	return &Mutation{
 		ms:      make([]*spanner.Mutation, 0),
 		applyer: applyer,
 	}
 }
 
-func (m *Mutation) Do(ctx context.Context, fn func(context.Context, *Mutation) error) error {
+func (m *Mutation) Do(ctx context.Context, fn func(context.Context, Mutator) error) error {
 	if err := fn(ctx, m); err != nil {
 		return err
 	}

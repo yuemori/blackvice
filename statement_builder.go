@@ -15,8 +15,8 @@ func (b StatementBuilder) Insert(target Model) spanner.Statement {
 	var columns []string
 
 	for col, _ := range target.Params() {
-		columns = append(columns, b.quote(col))
-		values = append(values, b.placeholder(col))
+		columns = append(columns, quote(col))
+		values = append(values, placeholder(col))
 	}
 
 	sql := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
@@ -45,7 +45,7 @@ func (b StatementBuilder) Update(target Model) spanner.Statement {
 			continue
 		}
 
-		columns = append(columns, b.quote(col)+"="+b.placeholder(col))
+		columns = append(columns, quote(col)+"="+placeholder(col))
 		params[col] = val
 	}
 
@@ -79,17 +79,17 @@ func (b StatementBuilder) buildWherePK(target Model) (string, map[string]interfa
 	params := map[string]interface{}{}
 	for k, val := range target.PrimaryKeys() {
 		key := fmt.Sprintf("pk_%s", k)
-		columns = append(columns, b.quote(k)+"="+b.placeholder(key))
+		columns = append(columns, quote(k)+"="+placeholder(key))
 		params[key] = val
 	}
 
 	return strings.Join(columns, " AND "), params
 }
 
-func (b StatementBuilder) quote(str string) string {
+func quote(str string) string {
 	return "`" + str + "`"
 }
 
-func (b StatementBuilder) placeholder(str string) string {
+func placeholder(str string) string {
 	return "@" + str
 }

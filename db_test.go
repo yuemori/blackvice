@@ -213,7 +213,7 @@ func TestCRUD(t *testing.T) {
 			UpdatedAt: time.Now(),
 		}
 
-		err = db.ReadWriteTransaction(ctx, func(ctx context.Context, tx blackvice.ReadWriteTransaction) error {
+		err = db.ReadWriteTransaction(ctx, func(ctx context.Context, tx blackvice.ReadWriter) error {
 			return tx.Insert(ctx, user)
 		})
 		if err != nil {
@@ -233,7 +233,7 @@ func TestCRUD(t *testing.T) {
 		updatedName := "updated"
 		user.Name = updatedName
 
-		err = db.ReadWriteTransaction(ctx, func(ctx context.Context, tx blackvice.ReadWriteTransaction) error {
+		err = db.ReadWriteTransaction(ctx, func(ctx context.Context, tx blackvice.ReadWriter) error {
 			return tx.Update(ctx, user)
 		})
 		if err != nil {
@@ -250,7 +250,7 @@ func TestCRUD(t *testing.T) {
 			t.Fatalf("Expected Name is %s, but %s", user.Name, res.Name)
 		}
 
-		err = db.ReadWriteTransaction(ctx, func(ctx context.Context, tx blackvice.ReadWriteTransaction) error {
+		err = db.ReadWriteTransaction(ctx, func(ctx context.Context, tx blackvice.ReadWriter) error {
 			return tx.Delete(ctx, user)
 		})
 		if err != nil {
@@ -286,7 +286,7 @@ func TestMutation(t *testing.T) {
 			UpdatedAt: time.Now(),
 		}
 
-		m := db.Mutation()
+		m := db.Mutator()
 		m.Insert(user)
 
 		err = m.Apply(ctx)
@@ -308,7 +308,7 @@ func TestMutation(t *testing.T) {
 		updatedName := "updated"
 		user.Name = updatedName
 
-		err = db.ReadWriteTransaction(ctx, func(ctx context.Context, tx blackvice.ReadWriteTransaction) error {
+		err = db.ReadWriteTransaction(ctx, func(ctx context.Context, tx blackvice.ReadWriter) error {
 			return tx.Update(ctx, user)
 		})
 		if err != nil {
@@ -325,7 +325,7 @@ func TestMutation(t *testing.T) {
 			t.Fatalf("Expected Name is %s, but %s", user.Name, res.Name)
 		}
 
-		err = db.ReadWriteTransaction(ctx, func(ctx context.Context, tx blackvice.ReadWriteTransaction) error {
+		err = db.ReadWriteTransaction(ctx, func(ctx context.Context, tx blackvice.ReadWriter) error {
 			return tx.Delete(ctx, user)
 		})
 		if err != nil {
@@ -335,6 +335,168 @@ func TestMutation(t *testing.T) {
 		err = db.Find(ctx, &testdata.User{UserId: userId})
 		if !blackvice.IsErrNotFound(err) {
 			t.Fatalf("Read User failed: %v", err)
+		}
+	})
+}
+
+func TestQuery(t *testing.T) {
+	runTests(t, dsn, func(db *blackvice.DB) {
+		ctx := context.Background()
+
+		users := []*testdata.User{
+			{
+				UserId:    "userId1",
+				Name:      "test1",
+				Age:       18,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			},
+			{
+				UserId:    "userId2",
+				Name:      "test2",
+				Age:       20,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			},
+			{
+				UserId:    "userId3",
+				Name:      "test3",
+				Age:       20,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			},
+		}
+
+		err := db.Mutator().Do(ctx, func(ctx context.Context, m blackvice.Mutator) error {
+			for _, user := range users {
+				m.Insert(user)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("Insert Users failed: %v", err)
+		}
+
+		rows, err := db.Relation(&testdata.User{}).All(ctx)
+		if err != nil {
+			t.Fatalf("Read User failed: %v", err)
+		}
+		if len(rows) != 3 {
+			t.Fatalf("User must be 3: %d", len(rows))
+		}
+
+		rows, err = db.Relation(&testdata.User{}).Where(map[string]interface{}{
+			"Age": 20,
+		}).All(ctx)
+		if err != nil {
+			t.Fatalf("Read User failed: %v", err)
+		}
+		if len(rows) != 2 {
+			t.Fatalf("User must be 2: %d", len(rows))
+		}
+
+		rows, err = db.Relation(&testdata.User{}).Where(map[string]interface{}{
+			"Age":  20,
+			"Name": "test2",
+		}).All(ctx)
+		if err != nil {
+			t.Fatalf("Read User failed: %v", err)
+		}
+		if len(rows) != 1 {
+			t.Fatalf("User must be 1: %d", len(rows))
+		}
+
+		rows, err = db.Relation(&testdata.User{}).Where(map[string]interface{}{
+			"Age": 20,
+		}).Where(map[string]interface{}{
+			"Name": "test2",
+		}).All(ctx)
+		if err != nil {
+			t.Fatalf("Read User failed: %v", err)
+		}
+		if len(rows) != 1 {
+			t.Fatalf("User must be 1: %d", len(rows))
+		}
+
+		rows, err = db.Relation(&testdata.User{}).Where(map[string]interface{}{
+			"Age": 20,
+		}).Where(map[string]interface{}{
+			"Age": 18,
+		}).All(ctx)
+		if err != nil {
+			t.Fatalf("Read User failed: %v", err)
+		}
+		if len(rows) != 1 {
+			t.Fatalf("User must be 1: %d", len(rows))
+		}
+
+		rows, err = db.Relation(&testdata.User{}).Where(map[string]interface{}{
+			"Age": 20,
+		}).Select([]string{"Age", "Name"}).All(ctx)
+		if err != nil {
+			t.Fatalf("Read User failed: %v", err)
+		}
+		// TODO: more test
+		if len(rows) != 2 {
+			t.Fatalf("User must be 1: %d", len(rows))
+		}
+
+		// TODO: implement
+		// rows, err = db.Relation(&testdata.User{}).Where(map[string]interface{}{
+		// 	"Age": []int{20, 18},
+		// }).All(ctx)
+		// if err != nil {
+		// 	t.Fatalf("Read User failed: %v", err)
+		// }
+		// if len(rows) != 2 {
+		// 	t.Fatalf("User must be 2: %d", len(rows))
+		// }
+
+		rows, err = db.Relation(&testdata.User{}).Order(map[string]blackvice.Direction{
+			"Age": blackvice.ASC,
+		}).All(ctx)
+		if err != nil {
+			t.Fatalf("Read User failed: %v", err)
+		}
+		if len(rows) != 3 {
+			t.Fatalf("User must be 1: %d", len(rows))
+		}
+		if rows[0].(*testdata.User).Age != 18 {
+			t.Fatal("User order was wrong")
+		}
+
+		rows, err = db.Relation(&testdata.User{}).Order(map[string]blackvice.Direction{
+			"Age":  blackvice.DESC,
+			"Name": blackvice.ASC,
+		}).All(ctx)
+		if err != nil {
+			t.Fatalf("Read User failed: %v", err)
+		}
+		if len(rows) != 3 {
+			t.Fatalf("User must be 1: %d", len(rows))
+		}
+		if rows[0].(*testdata.User).Age != 20 {
+			t.Fatal("User order was wrong")
+		}
+		if rows[0].(*testdata.User).Name != "test2" {
+			t.Fatal("User order was wrong")
+		}
+
+		rows, err = db.Relation(&testdata.User{}).Order(map[string]blackvice.Direction{
+			"Age":  blackvice.DESC,
+			"Name": blackvice.DESC,
+		}).All(ctx)
+		if err != nil {
+			t.Fatalf("Read User failed: %v", err)
+		}
+		if len(rows) != 3 {
+			t.Fatalf("User must be 1: %d", len(rows))
+		}
+		if rows[0].(*testdata.User).Age != 20 {
+			t.Fatal("User order was wrong")
+		}
+		if rows[0].(*testdata.User).Name != "test3" {
+			t.Fatal("User order was wrong")
 		}
 	})
 }

@@ -8,34 +8,34 @@ import (
 	"cloud.google.com/go/spanner"
 )
 
-type ReadWriteTx interface {
-	ReadTx
+type SpannerReadWriter interface {
+	SpannerReader
 
 	Update(ctx context.Context, stmt spanner.Statement) (rowCount int64, err error)
 }
 
-type ReadWriter struct {
-	tx      ReadWriteTx
+type ReadWriteTx struct {
+	tx      SpannerReadWriter
 	builder StatementBuilder
 }
 
-func NewReadWriter(tx ReadWriteTx) *ReadWriter {
-	return &ReadWriter{tx: tx}
+func NewReadWriteTx(tx SpannerReadWriter) *ReadWriteTx {
+	return &ReadWriteTx{tx: tx}
 }
 
-func (rw *ReadWriter) Relation(model Model) *Relation {
-	return NewRelation(model, rw.tx)
+func (rw *ReadWriteTx) Relation(model Model) *QueryContext {
+	return NewQueryContext(model, rw.tx)
 }
 
-func (rw *ReadWriter) Reader() *Reader {
-	return NewReader(rw.tx)
+func (rw *ReadWriteTx) Reader() *ReadTx {
+	return NewReadTx(rw.tx)
 }
 
-func (rw *ReadWriter) Find(ctx context.Context, model Model) error {
+func (rw *ReadWriteTx) Find(ctx context.Context, model Model) error {
 	return rw.Reader().Find(ctx, model)
 }
 
-func (rw *ReadWriter) Insert(ctx context.Context, target Model) error {
+func (rw *ReadWriteTx) Insert(ctx context.Context, target Model) error {
 	cnt, err := rw.tx.Update(ctx, rw.builder.Insert(target))
 	if err != nil {
 		return err
@@ -48,7 +48,7 @@ func (rw *ReadWriter) Insert(ctx context.Context, target Model) error {
 	return nil
 }
 
-func (rw *ReadWriter) Update(ctx context.Context, target Model) error {
+func (rw *ReadWriteTx) Update(ctx context.Context, target Model) error {
 	cnt, err := rw.tx.Update(ctx, rw.builder.Update(target))
 	if err != nil {
 		return err
@@ -61,7 +61,7 @@ func (rw *ReadWriter) Update(ctx context.Context, target Model) error {
 	return nil
 }
 
-func (rw *ReadWriter) Delete(ctx context.Context, target Model) error {
+func (rw *ReadWriteTx) Delete(ctx context.Context, target Model) error {
 	cnt, err := rw.tx.Update(ctx, rw.builder.Delete(target))
 	if err != nil {
 		return err

@@ -2,21 +2,30 @@ package blackvice
 
 import (
 	"context"
+
+	"cloud.google.com/go/spanner"
 )
 
-type Reader struct {
-	tx ReadTx
+type SpannerReader interface {
+	ReadRow(ctx context.Context, table string, key spanner.Key, columns []string) (*spanner.Row, error)
+	Read(ctx context.Context, table string, keys spanner.KeySet, columns []string) *spanner.RowIterator
+	ReadWithOptions(ctx context.Context, table string, keys spanner.KeySet, columns []string, opts *spanner.ReadOptions) (ri *spanner.RowIterator)
+	Query(ctx context.Context, statement spanner.Statement) *spanner.RowIterator
 }
 
-func NewReader(tx ReadTx) *Reader {
-	return &Reader{tx: tx}
+type ReadTx struct {
+	tx SpannerReader
 }
 
-func (r *Reader) Relation(model Model) *Relation {
-	return NewRelation(model, r.tx)
+func NewReadTx(tx SpannerReader) *ReadTx {
+	return &ReadTx{tx: tx}
 }
 
-func (r *Reader) Find(ctx context.Context, model Model) error {
+func (r *ReadTx) Relation(model Model) *QueryContext {
+	return NewQueryContext(model, r.tx)
+}
+
+func (r *ReadTx) Find(ctx context.Context, model Model) error {
 	var columns []string
 	for col := range model.Params() {
 		columns = append(columns, col)
